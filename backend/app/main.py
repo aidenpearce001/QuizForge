@@ -13,8 +13,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from app.routers import auth
+from app.routers import auth, subjects, domains, questions, study
 app.include_router(auth.router)
+app.include_router(subjects.router)
+app.include_router(domains.router)
+app.include_router(questions.router)
+app.include_router(study.router)
 
 @app.get("/api/health")
 async def health():
