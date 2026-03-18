@@ -38,9 +38,9 @@ export default function SessionLoginPage() {
       .finally(() => setLoading(false));
   }, [sessionId]);
 
-  // If already logged in, try joining directly
+  // If already logged in as student, try joining directly
   useEffect(() => {
-    if (user && session) {
+    if (user && user.role === "student" && session) {
       joinAndRedirect();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -120,10 +120,22 @@ export default function SessionLoginPage() {
       {/* Right: Auth Form */}
       <div className="lg:w-1/2 p-8 lg:p-16 flex items-center justify-center">
         <div className="w-full max-w-md">
-          {user ? (
+          {user && user.role === "student" ? (
             <div className="text-center">
               <p className="text-gray-300 mb-4">Logged in as <span className="text-blue-400 font-semibold">{user.full_name}</span></p>
               {submitting && <p className="text-gray-400">Joining session...</p>}
+              {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+            </div>
+          ) : user && user.role === "instructor" ? (
+            <div className="text-center space-y-4">
+              <p className="text-gray-400">You are logged in as <span className="text-blue-400 font-semibold">instructor</span>.</p>
+              <p className="text-gray-500 text-sm">Please logout first to join as a student.</p>
+              <button
+                onClick={async () => { await api.logout(); await refresh(); }}
+                className="px-6 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg text-sm"
+              >
+                Logout & continue as student
+              </button>
             </div>
           ) : (
             <>
