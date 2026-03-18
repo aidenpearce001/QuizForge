@@ -1,63 +1,91 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
-export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+export default function HomePage() {
+  const { user, loading, refresh } = useAuth();
   const router = useRouter();
-  const { refresh } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSubmitting(true);
-    try {
-      await api.login({ username, password });
-      await refresh();
-      router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Login failed");
-    } finally {
-      setSubmitting(false);
+  useEffect(() => {
+    if (!loading && user) {
+      router.push(user.role === "instructor" ? "/dashboard" : "/study");
     }
-  };
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-950 text-gray-400">
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-950">
-      <div className="w-full max-w-sm bg-gray-900 border border-gray-800 rounded-lg p-6">
-        <h1 className="text-xl font-semibold text-gray-100 mb-1">QuizForge</h1>
-        <p className="text-sm text-gray-400 mb-6">Instructor Login</p>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <input
-            type="text"
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500"
-            required
-          />
-          {error && <p className="text-sm text-red-400">{error}</p>}
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-100 mb-2">QuizForge</h1>
+          <p className="text-gray-400">Classroom quiz platform</p>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          {/* Instructor */}
           <button
-            type="submit"
-            disabled={submitting}
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded px-4 py-2 text-sm font-medium"
+            onClick={() => router.push("/login")}
+            className="w-full bg-gray-900 border border-gray-800 rounded-lg p-6 text-left hover:border-blue-500/50 transition-colors group"
           >
-            {submitting ? "Signing in..." : "Sign In"}
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center text-2xl">
+                📋
+              </div>
+              <div>
+                <div className="text-gray-100 font-semibold group-hover:text-blue-400 transition-colors">
+                  Instructor
+                </div>
+                <div className="text-sm text-gray-500">
+                  Manage sessions, questions & view results
+                </div>
+              </div>
+            </div>
           </button>
-        </form>
+
+          {/* Student */}
+          <button
+            onClick={() => router.push("/student-login")}
+            className="w-full bg-gray-900 border border-gray-800 rounded-lg p-6 text-left hover:border-green-500/50 transition-colors group"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-green-600/20 rounded-lg flex items-center justify-center text-2xl">
+                🎓
+              </div>
+              <div>
+                <div className="text-gray-100 font-semibold group-hover:text-green-400 transition-colors">
+                  Student
+                </div>
+                <div className="text-sm text-gray-500">
+                  Take quizzes & study materials
+                </div>
+              </div>
+            </div>
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-2">
+            <div className="flex-1 border-t border-gray-800"></div>
+            <span className="text-xs text-gray-600">or scan QR code to join a session</span>
+            <div className="flex-1 border-t border-gray-800"></div>
+          </div>
+
+          {/* Study Cards (public) */}
+          <button
+            onClick={() => router.push("/study")}
+            className="w-full text-center text-sm text-gray-500 hover:text-gray-300 transition-colors"
+          >
+            Browse study materials →
+          </button>
+        </div>
       </div>
     </div>
   );

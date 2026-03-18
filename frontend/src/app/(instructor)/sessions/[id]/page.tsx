@@ -15,10 +15,12 @@ type SessionDetail = {
 };
 
 type Attendee = {
-  student_name: string;
+  student_id: string;
+  full_name: string;
   status: string;
-  answered_count?: number;
-  total_questions?: number;
+  current_question?: number | null;
+  total_questions: number;
+  score?: number | null;
 };
 
 export default function SessionDetailPage() {
@@ -65,14 +67,14 @@ export default function SessionDetailPage() {
     return <p className="text-gray-400">Loading session...</p>;
   }
 
-  const statusBadge = (status: string, answered?: number, total?: number) => {
-    switch (status) {
+  const statusBadge = (a: Attendee) => {
+    switch (a.status) {
       case "completed":
-        return <span className="text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400">Completed</span>;
+        return <span className="text-xs px-2 py-0.5 rounded bg-green-900/50 text-green-400">Done — {Math.round(a.score ?? 0)}%</span>;
       case "in_progress":
         return (
           <span className="text-xs px-2 py-0.5 rounded bg-blue-900/50 text-blue-400">
-            In Progress {answered != null && total != null ? `(${answered}/${total})` : ""}
+            Q{a.current_question}/{a.total_questions}
           </span>
         );
       default:
@@ -146,8 +148,8 @@ export default function SessionDetailPage() {
                   key={i}
                   className="flex items-center justify-between py-1.5 border-b border-gray-800 last:border-0"
                 >
-                  <span className="text-sm text-gray-200">{a.student_name}</span>
-                  {statusBadge(a.status, a.answered_count, a.total_questions)}
+                  <span className="text-sm text-gray-200">{a.full_name}</span>
+                  {statusBadge(a)}
                 </div>
               ))}
             </div>

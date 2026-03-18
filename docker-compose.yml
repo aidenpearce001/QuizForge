@@ -13,8 +13,11 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8100:8000"
     env_file: .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://quizforge:quizforge@db:5432/quizforge
+      - FRONTEND_URL=http://217.216.111.217:3000
     depends_on:
       - db
     volumes:
@@ -24,7 +27,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "3000:3000"
+      - "0.0.0.0:3000:3000"
     environment:
       - BACKEND_URL=http://backend:8000
       - NEXT_PUBLIC_API_URL=
