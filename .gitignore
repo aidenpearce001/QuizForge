@@ -27,5 +27,8 @@ Thumbs.db
 # Uploads
 backend/uploads/
 
+# Data files (PDFs, domain HTMLs)
+data/
+
 # Superpowers
 .superpowers/
