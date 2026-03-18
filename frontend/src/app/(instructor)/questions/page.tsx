@@ -32,6 +32,20 @@ export default function QuestionsPage() {
     explanation: string;
   }>({ question_text: "", choices: [], explanation: "" });
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addForm, setAddForm] = useState({
+    domain_id: "",
+    question_text: "",
+    question_type: "single",
+    choices: [
+      { text: "", is_correct: false },
+      { text: "", is_correct: false },
+      { text: "", is_correct: false },
+      { text: "", is_correct: false },
+    ],
+    explanation: "",
+  });
+  const [addSaving, setAddSaving] = useState(false);
 
   useEffect(() => {
     api.getSubjects().then((s: Subject[]) => {
@@ -83,6 +97,43 @@ export default function QuestionsPage() {
     fetchQuestions();
   };
 
+  const resetAddForm = () => {
+    setAddForm({
+      domain_id: domains[0]?.id || "",
+      question_text: "",
+      question_type: "single",
+      choices: [
+        { text: "", is_correct: false },
+        { text: "", is_correct: false },
+        { text: "", is_correct: false },
+        { text: "", is_correct: false },
+      ],
+      explanation: "",
+    });
+  };
+
+  const handleAdd = async () => {
+    if (!selectedSubject || !addForm.domain_id || !addForm.question_text.trim()) return;
+    const validChoices = addForm.choices.filter(c => c.text.trim());
+    if (validChoices.length < 2) { alert("At least 2 choices required"); return; }
+    if (!validChoices.some(c => c.is_correct)) { alert("Mark at least one correct answer"); return; }
+
+    setAddSaving(true);
+    try {
+      await api.createQuestion(selectedSubject, {
+        ...addForm,
+        choices: validChoices,
+      });
+      setShowAdd(false);
+      resetAddForm();
+      fetchQuestions();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setAddSaving(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     try {
       await api.deleteQuestion(id);
@@ -96,7 +147,126 @@ export default function QuestionsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold mb-6">Question Bank</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold">Question Bank</h1>
+        <button
+          onClick={() => { setShowAdd(!showAdd); if (!showAdd) resetAddForm(); }}
+          className="bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium"
+        >
+          {showAdd ? "Cancel" : "+ Add Question"}
+        </button>
+      </div>
+
+      {/* Add Question Form */}
+      {showAdd && (
+        <div className="bg-gray-900 border border-blue-500/30 rounded-lg p-5 mb-6">
+          <h3 className="text-sm font-semibold text-blue-400 mb-4">New Question</h3>
+
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Domain</label>
+              <select
+                value={addForm.domain_id}
+                onChange={(e) => setAddForm({ ...addForm, domain_id: e.target.value })}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Select domain</option>
+                {domains.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Type</label>
+              <select
+                value={addForm.question_type}
+                onChange={(e) => setAddForm({ ...addForm, question_type: e.target.value })}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+              >
+                <option value="single">Single Answer</option>
+                <option value="multiple">Multiple Answers</option>
+                <option value="true_false">True / False</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <label className="block text-xs text-gray-500 mb-1">Question Text</label>
+            <textarea
+              value={addForm.question_text}
+              onChange={(e) => setAddForm({ ...addForm, question_text: e.target.value })}
+              placeholder="Enter question text..."
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-100 focus:outline-none focus:border-blue-500 min-h-[80px]"
+            />
+          </div>
+
+          <div className="mb-3">
+            <label className="block text-xs text-gray-500 mb-2">Choices (check correct answers)</label>
+            {addForm.choices.map((c, i) => (
+              <div key={i} className="flex items-center gap-2 mb-2">
+                <input
+                  type="checkbox"
+                  checked={c.is_correct}
+                  onChange={(e) => {
+                    const choices = [...addForm.choices];
+                    choices[i] = { ...choices[i], is_correct: e.target.checked };
+                    setAddForm({ ...addForm, choices });
+                  }}
+                  className="accent-green-500 w-4 h-4"
+                />
+                <input
+                  type="text"
+                  value={c.text}
+                  onChange={(e) => {
+                    const choices = [...addForm.choices];
+                    choices[i] = { ...choices[i], text: e.target.value };
+                    setAddForm({ ...addForm, choices });
+                  }}
+                  placeholder={`Choice ${String.fromCharCode(65 + i)}`}
+                  className="flex-1 px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+                />
+                {addForm.choices.length > 2 && (
+                  <button
+                    onClick={() => {
+                      const choices = addForm.choices.filter((_, j) => j !== i);
+                      setAddForm({ ...addForm, choices });
+                    }}
+                    className="text-gray-600 hover:text-red-400 text-sm"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            ))}
+            {addForm.choices.length < 6 && (
+              <button
+                onClick={() => setAddForm({ ...addForm, choices: [...addForm.choices, { text: "", is_correct: false }] })}
+                className="text-xs text-blue-400 hover:underline mt-1"
+              >
+                + Add choice
+              </button>
+            )}
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-xs text-gray-500 mb-1">Explanation (optional)</label>
+            <textarea
+              value={addForm.explanation}
+              onChange={(e) => setAddForm({ ...addForm, explanation: e.target.value })}
+              placeholder="Why is this the correct answer?"
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-gray-100 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <button
+            onClick={handleAdd}
+            disabled={addSaving}
+            className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded px-4 py-2 text-sm font-medium"
+          >
+            {addSaving ? "Saving..." : "Save Question"}
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-3 mb-4">
         <select

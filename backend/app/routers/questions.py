@@ -9,7 +9,7 @@ from app.models.question import Question
 from app.models.session import SessionQuestion, Session
 from app.models.user import User
 from app.services.auth import require_instructor
-from app.schemas.question import QuestionUpdate, QuestionResponse, ChoiceSchema
+from app.schemas.question import QuestionCreate, QuestionUpdate, QuestionResponse, ChoiceSchema
 
 router = APIRouter(prefix="/api", tags=["questions"])
 
@@ -48,6 +48,45 @@ async def list_questions(
         )
         for q in questions
     ]
+
+
+@router.post("/subjects/{subject_id}/questions", response_model=QuestionResponse)
+async def create_question(
+    subject_id: str,
+    body: QuestionCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_instructor),
+):
+    # Verify domain belongs to subject
+    result = await db.execute(
+        select(Domain).where(Domain.id == body.domain_id, Domain.subject_id == subject_id)
+    )
+    domain = result.scalar_one_or_none()
+    if not domain:
+        raise HTTPException(400, "Domain not found in this subject")
+
+    question = Question(
+        domain_id=body.domain_id,
+        source="manual",
+        question_text=body.question_text,
+        question_type=body.question_type,
+        choices=[c.model_dump() for c in body.choices],
+        explanation=body.explanation,
+    )
+    db.add(question)
+    await db.commit()
+    await db.refresh(question)
+    return QuestionResponse(
+        id=str(question.id),
+        domain_id=str(question.domain_id),
+        domain_name=domain.name,
+        question_text=question.question_text,
+        question_type=question.question_type,
+        choices=[ChoiceSchema(**c) for c in question.choices],
+        explanation=question.explanation,
+        source=question.source,
+        created_at=question.created_at.isoformat(),
+    )
 
 
 @router.get("/questions/{question_id}", response_model=QuestionResponse)

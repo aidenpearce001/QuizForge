@@ -6,6 +6,14 @@ class ChoiceSchema(BaseModel):
     is_correct: bool
 
 
+class QuestionCreate(BaseModel):
+    domain_id: str
+    question_text: str
+    question_type: str = "single"
+    choices: list[ChoiceSchema]
+    explanation: str | None = None
+
+
 class QuestionUpdate(BaseModel):
     question_text: str | None = None
     question_type: str | None = None

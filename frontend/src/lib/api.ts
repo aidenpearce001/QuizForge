@@ -47,6 +47,7 @@ export const api = {
 
   // Questions
   getQuestions: (subjectId: string, params?: string) => apiFetch(`/api/subjects/${subjectId}/questions${params ? `?${params}` : ""}`),
+  createQuestion: (subjectId: string, data: any) => apiFetch(`/api/subjects/${subjectId}/questions`, { method: "POST", body: JSON.stringify(data) }),
   updateQuestion: (id: string, data: any) => apiFetch(`/api/questions/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteQuestion: (id: string) => apiFetch(`/api/questions/${id}`, { method: "DELETE" }),
 
