@@ -14,12 +14,12 @@ type QuizMeta = {
 };
 
 type Question = {
-  number: number;
-  text: string;
+  question_number: number;
+  question_text: string;
   question_type: string;
   domain_name: string;
   choices: { index: number; text: string }[];
-  selected_choices: number[];
+  selected_choices: number[] | null;
 };
 
 export default function QuizPage() {
@@ -82,8 +82,8 @@ export default function QuizPage() {
     try {
       const q = await api.getQuestion(quizId, n);
       setQuestion(q);
-      setSelected(q.selected_choices || []);
-      if (q.selected_choices?.length > 0) {
+      setSelected(q.selected_choices ?? []);
+      if (q.selected_choices && q.selected_choices.length > 0) {
         setAnswered((prev) => new Set(prev).add(n));
       }
     } catch {
@@ -210,7 +210,7 @@ export default function QuizPage() {
               </span>
 
               {/* Question Text */}
-              <h2 className="text-xl font-semibold mb-6 leading-relaxed">{question.text}</h2>
+              <h2 className="text-xl font-semibold mb-6 leading-relaxed">{question.question_text}</h2>
 
               {/* Multiple select hint */}
               {question.question_type === "multiple" && (
@@ -241,6 +241,11 @@ export default function QuizPage() {
                 })}
               </div>
 
+              {/* Answer required hint */}
+              {selected.length === 0 && (
+                <p className="text-sm text-yellow-400/70 mb-4">Please select an answer to continue</p>
+              )}
+
               {/* Navigation */}
               <div className="flex items-center justify-between">
                 <button
@@ -254,15 +259,16 @@ export default function QuizPage() {
                 {currentQ === meta.total_questions ? (
                   <button
                     onClick={handleSubmitQuiz}
-                    disabled={submitting}
-                    className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 font-medium transition-colors"
+                    disabled={submitting || selected.length === 0}
+                    className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed font-medium transition-colors"
                   >
                     {submitting ? "Submitting..." : "Submit Quiz"}
                   </button>
                 ) : (
                   <button
                     onClick={() => setCurrentQ((q) => Math.min(meta.total_questions, q + 1))}
-                    className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 font-medium transition-colors"
+                    disabled={selected.length === 0}
+                    className="px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-30 disabled:cursor-not-allowed font-medium transition-colors"
                   >
                     Next
                   </button>
