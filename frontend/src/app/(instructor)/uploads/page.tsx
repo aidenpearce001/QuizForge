@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { api } from "@/lib/api";
+import { api, apiFetch } from "@/lib/api";
 
 type Subject = { id: string; name: string };
 type PdfUpload = {
@@ -60,6 +60,25 @@ export default function UploadsPage() {
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async (pdfId: string) => {
+    if (!confirm("Delete this upload and its questions?")) return;
+    try {
+      await apiFetch(`/api/subjects/${selectedSubject}/pdfs/${pdfId}`, { method: "DELETE" });
+      fetchPdfs();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleReprocess = async (pdfId: string) => {
+    try {
+      await apiFetch(`/api/subjects/${selectedSubject}/pdfs/${pdfId}/reprocess`, { method: "POST" });
+      fetchPdfs();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
@@ -137,21 +156,27 @@ export default function UploadsPage() {
                   <td className="p-3">{statusBadge(p.status)}</td>
                   <td className="p-3 text-gray-400">{p.questions_extracted}</td>
                   <td className="p-3">
-                    {p.status === "error" && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-red-400 truncate max-w-[200px]" title={p.error_message}>
-                          {p.error_message}
-                        </span>
-                        <button
-                          onClick={() => {
-                            /* reprocess would go here */
-                          }}
-                          className="text-xs text-blue-400 hover:underline whitespace-nowrap"
-                        >
-                          Reprocess
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {p.status === "error" && (
+                        <>
+                          <span className="text-xs text-red-400 truncate max-w-[200px]" title={p.error_message}>
+                            {p.error_message}
+                          </span>
+                          <button
+                            onClick={() => handleReprocess(p.id)}
+                            className="text-xs text-blue-400 hover:underline whitespace-nowrap"
+                          >
+                            Reprocess
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleDelete(p.id)}
+                        className="text-xs text-red-400 hover:underline whitespace-nowrap"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

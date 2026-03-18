@@ -56,7 +56,7 @@ export default function NewSessionPage() {
         title,
         subject_id: selectedSubject,
         domain_ids: Array.from(selectedDomains),
-        questions_per_student: questionsPerStudent,
+        questions_per_quiz: questionsPerStudent,
         time_limit_minutes: timeLimit || null,
       });
       router.push(`/sessions/${result.id}`);

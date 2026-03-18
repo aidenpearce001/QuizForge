@@ -114,3 +114,21 @@ async def reprocess_pdf(
 
     background_tasks.add_task(_process_pdf, pdf_id, subject_id)
     return {"ok": True}
+
+
+@router.delete("/{pdf_id}")
+async def delete_pdf(
+    subject_id: str, pdf_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_instructor),
+):
+    result = await db.execute(select(PdfUpload).where(PdfUpload.id == pdf_id))
+    pdf_upload = result.scalar_one_or_none()
+    if not pdf_upload:
+        raise HTTPException(404, "PDF not found")
+
+    # Delete associated questions
+    await db.execute(delete(Question).where(Question.source_pdf_id == pdf_id))
+    await db.delete(pdf_upload)
+    await db.commit()
+    return {"ok": True}
