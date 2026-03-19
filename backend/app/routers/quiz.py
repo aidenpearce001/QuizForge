@@ -22,6 +22,36 @@ class AnswerRequest(BaseModel):
     selected_choices: list[int]  # Original indices
 
 
+@router.get("/my-quizzes")
+async def my_quizzes(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get all quizzes the current student has taken."""
+    result = await db.execute(
+        select(StudentQuiz)
+        .where(StudentQuiz.student_id == user.id)
+        .order_by(StudentQuiz.started_at.desc())
+    )
+    quizzes = result.scalars().all()
+
+    items = []
+    for q in quizzes:
+        session_result = await db.execute(select(Session).where(Session.id == q.session_id))
+        session = session_result.scalar_one_or_none()
+        items.append({
+            "quiz_id": str(q.id),
+            "session_id": str(q.session_id),
+            "session_title": session.title if session else "Unknown",
+            "started_at": q.started_at.isoformat(),
+            "submitted_at": q.submitted_at.isoformat() if q.submitted_at else None,
+            "score": q.score,
+            "total_correct": q.total_correct,
+            "total_questions": q.total_questions,
+        })
+    return items
+
+
 @router.post("/sessions/{session_id}/join")
 async def join_session(
     session_id: str,

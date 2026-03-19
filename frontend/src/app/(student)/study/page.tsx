@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
 type Subject = {
   id: string;
@@ -13,6 +14,17 @@ type StudyCard = {
   domain_id: string;
   domain_name: string;
   content: string;
+};
+
+type MyQuiz = {
+  quiz_id: string;
+  session_id: string;
+  session_title: string;
+  started_at: string;
+  submitted_at: string | null;
+  score: number | null;
+  total_correct: number | null;
+  total_questions: number;
 };
 
 const DOMAIN_META: Record<
@@ -75,7 +87,9 @@ function countTopics(content: string): number {
 }
 
 export default function StudyPage() {
+  const { user } = useAuth();
   const [cards, setCards] = useState<StudyCard[]>([]);
+  const [myQuizzes, setMyQuizzes] = useState<MyQuiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -92,12 +106,20 @@ export default function StudyPage() {
         setCards(data);
       } catch {
         setError("Failed to load study cards");
-      } finally {
-        setLoading(false);
       }
+      // Fetch student's quizzes if logged in
+      if (user && user.role === "student") {
+        try {
+          const quizzes = await api.getMyQuizzes();
+          setMyQuizzes(quizzes);
+        } catch {
+          // Not logged in or failed — no problem
+        }
+      }
+      setLoading(false);
     }
     load();
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (
@@ -130,6 +152,70 @@ export default function StudyPage() {
             Review key concepts before your quiz
           </p>
         </div>
+
+        {/* My Quizzes */}
+        {myQuizzes.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-xl font-semibold text-gray-100 mb-4">My Quizzes</h2>
+            <div className="flex flex-col gap-3">
+              {myQuizzes.map((q) => {
+                const scoreColor = q.score !== null
+                  ? q.score >= 80 ? "text-green-400" : q.score >= 50 ? "text-yellow-400" : "text-red-400"
+                  : "text-gray-500";
+                const date = new Date(q.started_at).toLocaleDateString();
+                return (
+                  <div
+                    key={q.quiz_id}
+                    className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex items-center justify-between"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-gray-100 font-medium truncate">{q.session_title}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{date}</p>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0 ml-4">
+                      {q.submitted_at ? (
+                        <>
+                          <span className={`text-lg font-bold ${scoreColor}`}>
+                            {Math.round(q.score ?? 0)}%
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {q.total_correct}/{q.total_questions}
+                          </span>
+                          <div className="flex gap-2">
+                            <Link
+                              href={`/results/${q.quiz_id}`}
+                              className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded px-3 py-1.5 transition-colors"
+                            >
+                              Results
+                            </Link>
+                            <Link
+                              href={`/leaderboard/${q.session_id}`}
+                              className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded px-3 py-1.5 transition-colors"
+                            >
+                              Leaderboard
+                            </Link>
+                          </div>
+                        </>
+                      ) : (
+                        <Link
+                          href={`/quiz/${q.quiz_id}`}
+                          className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded px-3 py-1.5 font-medium transition-colors"
+                        >
+                          Continue Quiz
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Study Cards */}
+        <h2 className="text-xl font-semibold text-gray-100 mb-4">
+          {myQuizzes.length > 0 ? "Study Cards" : ""}
+        </h2>
 
         {cards.length === 0 ? (
           <p className="text-gray-400">No study cards available yet.</p>

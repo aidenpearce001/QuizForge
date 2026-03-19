@@ -46,6 +46,7 @@ export const api = {
     apiFetch(`/api/quiz/${quizId}/question/${n}/answer`, { method: "POST", body: JSON.stringify(data) }),
   submitQuiz: (quizId: string) => apiFetch(`/api/quiz/${quizId}/submit`, { method: "POST" }),
   getQuizResults: (quizId: string) => apiFetch(`/api/quiz/${quizId}/results`),
+  getMyQuizzes: () => apiFetch("/api/my-quizzes"),
 
   // Questions
   getQuestions: (subjectId: string, params?: string) => apiFetch(`/api/subjects/${subjectId}/questions${params ? `?${params}` : ""}`),
