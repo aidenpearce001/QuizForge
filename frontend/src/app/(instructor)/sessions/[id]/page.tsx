@@ -55,12 +55,23 @@ export default function SessionDetailPage() {
     }
   };
 
-  const handleCopy = () => {
-    if (session?.qr_url) {
-      navigator.clipboard.writeText(session.qr_url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    if (!session?.qr_url) return;
+    try {
+      await navigator.clipboard.writeText(session.qr_url);
+    } catch {
+      // Fallback for non-HTTPS (clipboard API blocked)
+      const textarea = document.createElement("textarea");
+      textarea.value = session.qr_url;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   if (!session) {
