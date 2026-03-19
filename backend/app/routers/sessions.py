@@ -192,6 +192,48 @@ async def get_attendance(
     return entries
 
 
+@router.get("/{session_id}/leaderboard")
+async def get_leaderboard(session_id: str, db: AsyncSession = Depends(get_db)):
+    """Public endpoint — students can see rankings after submitting."""
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    result = await db.execute(
+        select(StudentQuiz).where(
+            StudentQuiz.session_id == session_id,
+            StudentQuiz.submitted_at.isnot(None),
+        )
+    )
+    quizzes = result.scalars().all()
+
+    entries = []
+    for q in quizzes:
+        time_taken = None
+        if q.submitted_at and q.started_at:
+            time_taken = int((q.submitted_at - q.started_at).total_seconds())
+        entries.append({
+            "full_name": q.student.full_name,
+            "score": q.score or 0,
+            "total_correct": q.total_correct or 0,
+            "total_questions": q.total_questions,
+            "time_taken_seconds": time_taken,
+        })
+
+    # Sort by score desc, then time_taken asc (faster is better)
+    entries.sort(key=lambda e: (-e["score"], e["time_taken_seconds"] or float("inf")))
+
+    # Add rank
+    for i, entry in enumerate(entries):
+        entry["rank"] = i + 1
+
+    return {
+        "session_title": session.title,
+        "entries": entries,
+    }
+
+
 @router.get("/{session_id}/results")
 async def get_results(
     session_id: str,

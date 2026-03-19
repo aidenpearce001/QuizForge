@@ -36,6 +36,7 @@ export const api = {
   toggleSession: (id: string) => apiFetch(`/api/sessions/${id}/toggle`, { method: "PUT" }),
   getAttendance: (id: string) => apiFetch(`/api/sessions/${id}/attendance`),
   getResults: (id: string) => apiFetch(`/api/sessions/${id}/results`),
+  getLeaderboard: (sessionId: string) => apiFetch(`/api/sessions/${sessionId}/leaderboard`),
 
   // Quiz (student)
   joinSession: (sessionId: string) => apiFetch(`/api/sessions/${sessionId}/join`, { method: "POST" }),

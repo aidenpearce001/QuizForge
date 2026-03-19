@@ -19,6 +19,7 @@ type SubmitData = {
   total_correct: number;
   total_questions: number;
   results: QuestionResult[];
+  session_id?: string;
 };
 
 export default function ResultsPage() {
@@ -26,6 +27,7 @@ export default function ResultsPage() {
   const quizId = params.id as string;
 
   const [data, setData] = useState<SubmitData | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -40,6 +42,13 @@ export default function ResultsPage() {
         // The submit endpoint returns 400 "Quiz already submitted"
         // We don't have a separate "get results" endpoint, so show a message
         setError("Quiz already submitted. Results were shown after submission.");
+      }
+      // Fetch session_id from quiz meta for leaderboard link
+      try {
+        const meta = await api.getQuizMeta(quizId);
+        setSessionId(meta.session_id);
+      } catch {
+        // Non-critical — leaderboard link just won't show
       }
       setLoading(false);
     }
@@ -75,6 +84,61 @@ export default function ResultsPage() {
     if (q.is_correct) domainMap[q.domain_name].correct++;
   }
   const domainScores = Object.entries(domainMap).map(([name, s]) => ({ name, ...s }));
+
+  function downloadResults() {
+    if (!data) return;
+    const date = new Date().toISOString().split("T")[0];
+    let text = "QuizForge \u2014 Quiz Results\n";
+    text += "========================\n";
+    text += `Score: ${Math.round(data.score)}% (${data.total_correct}/${data.total_questions} correct)\n`;
+    text += `Date: ${date}\n\n`;
+
+    // Domain breakdown
+    if (domainScores.length > 0) {
+      text += "Domain Breakdown:\n";
+      for (const ds of domainScores) {
+        const pct = ds.total > 0 ? Math.round((ds.correct / ds.total) * 100) : 0;
+        text += `- ${ds.name}: ${ds.correct}/${ds.total} (${pct}%)\n`;
+      }
+      text += "\n";
+    }
+
+    // Question review
+    text += "Question Review:\n---\n";
+    for (const q of data.results) {
+      const status = q.is_correct ? "CORRECT" : "WRONG";
+      text += `Q${q.question_number}. [${status}] ${q.question_text}\n`;
+      for (let i = 0; i < q.choices.length; i++) {
+        const wasSelected = q.selected_choices.includes(i);
+        if (wasSelected) {
+          const letter = String.fromCharCode(65 + i);
+          const mark = q.choices[i].is_correct ? "\u2713" : "\u2717";
+          text += `   Your answer: ${letter}. ${q.choices[i].text} ${mark}\n`;
+        }
+      }
+      if (!q.is_correct) {
+        for (let i = 0; i < q.choices.length; i++) {
+          if (q.choices[i].is_correct) {
+            const letter = String.fromCharCode(65 + i);
+            text += `   Correct: ${letter}. ${q.choices[i].text}\n`;
+          }
+        }
+        if (q.explanation) {
+          text += `   Explanation: ${q.explanation}\n`;
+        }
+      }
+      text += "\n";
+    }
+    text += "---\n";
+
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "quiz-results.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   function scoreColor(pct: number) {
     if (pct >= 70) return "text-green-400";
@@ -192,9 +256,23 @@ export default function ResultsPage() {
           </div>
         </div>
 
-        <div className="text-center mt-10">
+        <div className="flex items-center justify-center gap-6 mt-10">
+          <button
+            onClick={downloadResults}
+            className="text-gray-400 hover:text-gray-200 text-sm border border-gray-700 rounded-lg px-4 py-2 hover:border-gray-500 transition-colors"
+          >
+            Download Results
+          </button>
+          {sessionId && (
+            <a
+              href={`/leaderboard/${sessionId}`}
+              className="text-blue-400 hover:text-blue-300 text-sm"
+            >
+              View Leaderboard &rarr;
+            </a>
+          )}
           <a href="/study" className="text-blue-400 hover:text-blue-300 text-sm">
-            Go to Study Cards →
+            Go to Study Cards &rarr;
           </a>
         </div>
       </div>

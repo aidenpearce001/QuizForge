@@ -63,6 +63,7 @@ async def get_quiz_meta(
 
     return QuizMetaResponse(
         quiz_id=str(quiz.id),
+        session_id=str(quiz.session_id),
         session_title=session.title if session else "",
         total_questions=quiz.total_questions,
         time_limit_minutes=session.time_limit_minutes if session else None,

@@ -3,6 +3,7 @@ from pydantic import BaseModel
 
 class QuizMetaResponse(BaseModel):
     quiz_id: str
+    session_id: str
     session_title: str
     total_questions: int
     time_limit_minutes: int | None
