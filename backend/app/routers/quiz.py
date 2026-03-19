@@ -236,3 +236,49 @@ async def submit_quiz(
         total_questions=grade_result["total_questions"],
         results=results,
     )
+
+
+@router.get("/quiz/{quiz_id}/results", response_model=SubmitResponse)
+async def get_quiz_results(
+    quiz_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get results for an already-submitted quiz."""
+    result = await db.execute(select(StudentQuiz).where(StudentQuiz.id == quiz_id))
+    quiz = result.scalar_one_or_none()
+    if not quiz or str(quiz.student_id) != str(user.id):
+        raise HTTPException(404, "Quiz not found")
+    if not quiz.submitted_at:
+        raise HTTPException(400, "Quiz not yet submitted")
+
+    results = []
+    for i, order_entry in enumerate(quiz.questions_order):
+        qid = order_entry["question_id"]
+        q_result = await db.execute(select(Question).where(Question.id == qid))
+        question = q_result.scalar_one_or_none()
+
+        ans_result = await db.execute(
+            select(StudentAnswer).where(
+                StudentAnswer.student_quiz_id == quiz.id,
+                StudentAnswer.question_id == qid,
+            )
+        )
+        answer = ans_result.scalar_one_or_none()
+
+        results.append({
+            "question_number": i + 1,
+            "question_text": question.question_text,
+            "domain_name": question.domain.name if question.domain else "",
+            "choices": question.choices,
+            "selected_choices": answer.selected_choices if answer else [],
+            "is_correct": answer.is_correct if answer else False,
+            "explanation": question.explanation,
+        })
+
+    return SubmitResponse(
+        score=quiz.score or 0,
+        total_correct=quiz.total_correct or 0,
+        total_questions=quiz.total_questions,
+        results=results,
+    )

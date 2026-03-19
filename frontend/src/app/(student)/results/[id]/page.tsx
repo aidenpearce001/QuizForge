@@ -38,10 +38,13 @@ export default function ResultsPage() {
         const res = await api.submitQuiz(quizId);
         setData(res);
       } catch {
-        // Already submitted — we need to re-fetch
-        // The submit endpoint returns 400 "Quiz already submitted"
-        // We don't have a separate "get results" endpoint, so show a message
-        setError("Quiz already submitted. Results were shown after submission.");
+        // Already submitted — fetch results from GET endpoint
+        try {
+          const res = await api.getQuizResults(quizId);
+          setData(res);
+        } catch {
+          setError("Could not load results. Please try again.");
+        }
       }
       // Fetch session_id from quiz meta for leaderboard link
       try {
