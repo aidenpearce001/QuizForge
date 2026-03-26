@@ -192,6 +192,78 @@ async def get_attendance(
     return entries
 
 
+@router.get("/{session_id}/questions-review")
+async def get_session_questions_review(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_instructor),
+):
+    """Get all questions in a session with answers, explanations, and stats."""
+    result = await db.execute(select(Session).where(Session.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    # Get session questions
+    sq_result = await db.execute(
+        select(SessionQuestion).where(SessionQuestion.session_id == session_id)
+    )
+    session_questions = sq_result.scalars().all()
+
+    # Get all submitted quizzes for stats
+    quiz_result = await db.execute(
+        select(StudentQuiz).where(
+            StudentQuiz.session_id == session_id,
+            StudentQuiz.submitted_at.isnot(None),
+        )
+    )
+    quizzes = quiz_result.scalars().all()
+
+    # Build per-question answer stats
+    q_stats: dict[str, dict] = {}
+    for quiz in quizzes:
+        for a in quiz.answers:
+            qid = str(a.question_id)
+            if qid not in q_stats:
+                q_stats[qid] = {"correct": 0, "total": 0, "correct_students": [], "incorrect_students": []}
+            q_stats[qid]["total"] += 1
+            if a.is_correct:
+                q_stats[qid]["correct"] += 1
+                q_stats[qid]["correct_students"].append(quiz.student.full_name)
+            else:
+                q_stats[qid]["incorrect_students"].append(quiz.student.full_name)
+
+    questions = []
+    for sq in session_questions:
+        q = sq.question
+        qid = str(q.id)
+        stats = q_stats.get(qid, {"correct": 0, "total": 0, "correct_students": [], "incorrect_students": []})
+        rate = round(stats["correct"] / stats["total"] * 100, 1) if stats["total"] > 0 else None
+
+        questions.append({
+            "question_id": qid,
+            "question_text": q.question_text,
+            "question_type": q.question_type,
+            "domain_name": q.domain.name if q.domain else "",
+            "choices": q.choices,
+            "explanation": q.explanation,
+            "correct_rate": rate,
+            "total_attempts": stats["total"],
+            "correct_count": stats["correct"],
+            "correct_students": stats["correct_students"],
+            "incorrect_students": stats["incorrect_students"],
+        })
+
+    # Sort by correct_rate ascending (hardest first), unanswered last
+    questions.sort(key=lambda q: (q["correct_rate"] is None, q["correct_rate"] or 0))
+
+    return {
+        "session_title": session.title,
+        "total_questions": len(questions),
+        "questions": questions,
+    }
+
+
 @router.get("/{session_id}/leaderboard")
 async def get_leaderboard(session_id: str, db: AsyncSession = Depends(get_db)):
     """Public endpoint — students can see rankings after submitting."""
@@ -309,7 +381,36 @@ async def get_results(
             "total_attempts": total,
         }
 
+    # Build per-question stats with who answered correctly
+    question_stats = []
+    for qid in question_total_counts:
+        total = question_total_counts[qid]
+        correct = question_correct_counts.get(qid, 0)
+        # Find who answered this question correctly/incorrectly
+        correct_students = []
+        incorrect_students = []
+        for q in quizzes:
+            for a in q.answers:
+                if str(a.question_id) == qid:
+                    if a.is_correct:
+                        correct_students.append(q.student.full_name)
+                    else:
+                        incorrect_students.append(q.student.full_name)
+        question_stats.append({
+            "question_id": qid,
+            "question_text": question_text_map.get(qid, ""),
+            "correct_rate": round(correct / total * 100, 1) if total > 0 else 0,
+            "total_attempts": total,
+            "correct_count": correct,
+            "correct_students": correct_students,
+            "incorrect_students": incorrect_students,
+        })
+
+    # Sort by correct_rate ascending (hardest first)
+    question_stats.sort(key=lambda q: q["correct_rate"])
+
     return {
         "results": [e.model_dump() for e in sorted_entries],
         "hardest_question": hardest_question,
+        "question_stats": question_stats,
     }
