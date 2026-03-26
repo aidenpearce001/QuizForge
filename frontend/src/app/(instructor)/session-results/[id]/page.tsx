@@ -144,7 +144,22 @@ export default function ResultsPage() {
           <p className="text-xl font-semibold text-gray-100">{formatTime(avgTime)}</p>
         </div>
         <button
-          onClick={() => hardestQuestion && setShowStatsModal(hardestQuestion)}
+          onClick={() => {
+            if (!hardestQuestion) return;
+            // Find full stats from question_stats array
+            const full = questionStats.find(q => q.question_id === (hardestQuestion as any).question_id);
+            if (full) {
+              setShowStatsModal(full);
+            } else {
+              // Fallback: use hardest_question data with empty student lists
+              setShowStatsModal({
+                ...hardestQuestion,
+                correct_count: 0,
+                correct_students: [],
+                incorrect_students: [],
+              } as QuestionStat);
+            }
+          }}
           className="bg-gray-900 border border-gray-800 rounded-lg p-4 text-left hover:border-red-500/30 transition-colors"
         >
           <p className="text-xs text-gray-500 uppercase">Hardest Question</p>
