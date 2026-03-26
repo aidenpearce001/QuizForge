@@ -204,9 +204,14 @@ async def get_session_questions_review(
     if not session:
         raise HTTPException(404, "Session not found")
 
-    # Get session questions
+    # Get session questions with explicit eager loading
+    from sqlalchemy.orm import selectinload
     sq_result = await db.execute(
-        select(SessionQuestion).where(SessionQuestion.session_id == session_id)
+        select(SessionQuestion)
+        .where(SessionQuestion.session_id == session_id)
+        .options(
+            selectinload(SessionQuestion.question).selectinload(Question.domain)
+        )
     )
     session_questions = sq_result.scalars().all()
 
@@ -236,6 +241,8 @@ async def get_session_questions_review(
     questions = []
     for sq in session_questions:
         q = sq.question
+        if not q:
+            continue
         qid = str(q.id)
         stats = q_stats.get(qid, {"correct": 0, "total": 0, "correct_students": [], "incorrect_students": []})
         rate = round(stats["correct"] / stats["total"] * 100, 1) if stats["total"] > 0 else None
