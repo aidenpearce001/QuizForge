@@ -268,8 +268,9 @@ export default function ResultsPage() {
             <div key={q.question_id} className="bg-gray-900 border border-gray-800 rounded-lg p-5">
               <div className="flex items-start gap-3 mb-3">
                 <span className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                  q.correct_rate !== null && q.correct_rate >= 70 ? "bg-green-500/20 text-green-400" :
-                  q.correct_rate !== null && q.correct_rate >= 40 ? "bg-yellow-500/20 text-yellow-400" :
+                  q.correct_rate === null ? "bg-gray-700/50 text-gray-500" :
+                  q.correct_rate >= 70 ? "bg-green-500/20 text-green-400" :
+                  q.correct_rate >= 40 ? "bg-yellow-500/20 text-yellow-400" :
                   "bg-red-500/20 text-red-400"
                 }`}>
                   {i + 1}
@@ -278,13 +279,17 @@ export default function ResultsPage() {
                   <p className="text-gray-200 leading-relaxed">{q.question_text}</p>
                   <div className="flex gap-2 mt-2">
                     <span className="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400">{q.domain_name}</span>
-                    {q.correct_rate !== null && (
+                    {q.correct_rate !== null ? (
                       <span className={`text-xs px-2 py-0.5 rounded ${
                         q.correct_rate >= 70 ? "bg-green-900/30 text-green-400" :
                         q.correct_rate >= 40 ? "bg-yellow-900/30 text-yellow-400" :
                         "bg-red-900/30 text-red-400"
                       }`}>
                         {Math.round(q.correct_rate)}% correct ({q.correct_count}/{q.total_attempts})
+                      </span>
+                    ) : (
+                      <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-500">
+                        Not attempted
                       </span>
                     )}
                   </div>
@@ -309,8 +314,9 @@ export default function ResultsPage() {
               </div>
               {/* Explanation */}
               {q.explanation && (
-                <div className="ml-11 text-sm text-gray-400 bg-gray-800/50 rounded-lg p-3">
-                  {q.explanation}
+                <div className="ml-11 text-sm bg-gray-800/50 rounded-lg p-3">
+                  <p className="text-xs text-blue-400 font-medium uppercase tracking-wider mb-1">Explanation</p>
+                  <p className="text-gray-300">{q.explanation}</p>
                 </div>
               )}
             </div>

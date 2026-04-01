@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 
 type QuestionResult = {
@@ -24,12 +24,17 @@ type SubmitData = {
 
 export default function ResultsPage() {
   const params = useParams();
+  const router = useRouter();
   const quizId = params.id as string;
 
   const [data, setData] = useState<SubmitData | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionTitle, setSessionTitle] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
+  const isPractice = sessionTitle.startsWith("Practice");
 
   useEffect(() => {
     async function fetchResults() {
@@ -50,6 +55,7 @@ export default function ResultsPage() {
       try {
         const meta = await api.getQuizMeta(quizId);
         setSessionId(meta.session_id);
+        setSessionTitle(meta.session_title || "");
       } catch {
         // Non-critical — leaderboard link just won't show
       }
@@ -241,6 +247,9 @@ export default function ResultsPage() {
                         <span className={isRight ? "text-green-300" : wasSelected ? "text-red-300" : "text-gray-400"}>
                           {c.text}
                         </span>
+                        {isRight && (
+                          <span className="ml-2 text-xs text-green-400">Correct</span>
+                        )}
                         {wasSelected && (
                           <span className="ml-2 text-xs text-gray-500">(your answer)</span>
                         )}
@@ -250,9 +259,10 @@ export default function ResultsPage() {
                 </div>
 
                 {q.explanation && (
-                  <p className="ml-9 text-sm text-gray-400 bg-gray-800/50 rounded-lg p-3">
-                    {q.explanation}
-                  </p>
+                  <div className="ml-9 text-sm bg-gray-800/50 rounded-lg p-3">
+                    <p className="text-xs text-blue-400 font-medium uppercase tracking-wider mb-1">Explanation</p>
+                    <p className="text-gray-300">{q.explanation}</p>
+                  </div>
                 )}
               </div>
             ))}
@@ -266,7 +276,7 @@ export default function ResultsPage() {
           >
             Download Results
           </button>
-          {sessionId && (
+          {sessionId && !isPractice && (
             <a
               href={`/leaderboard/${sessionId}`}
               className="text-blue-400 hover:text-blue-300 text-sm"
@@ -274,9 +284,25 @@ export default function ResultsPage() {
               View Leaderboard &rarr;
             </a>
           )}
-          <a href="/study" className="text-blue-400 hover:text-blue-300 text-sm">
-            Go to Study Cards &rarr;
-          </a>
+          {isPractice && (
+            <button
+              onClick={async () => {
+                if (!confirm("Delete this practice quiz? This cannot be undone.")) return;
+                setDeleting(true);
+                try {
+                  await api.deletePracticeQuiz(quizId);
+                  router.push("/my-quizzes");
+                } catch {
+                  alert("Failed to delete quiz");
+                  setDeleting(false);
+                }
+              }}
+              disabled={deleting}
+              className="text-red-400/70 hover:text-red-400 text-sm border border-red-500/20 rounded-lg px-4 py-2 hover:border-red-500/40 transition-colors disabled:opacity-40"
+            >
+              {deleting ? "Deleting..." : "Delete Practice Quiz"}
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 
+from sqlalchemy import delete as sa_delete
 from app.database import get_db
 from app.models.user import User
 from app.models.session import Session
@@ -20,6 +21,11 @@ router = APIRouter(prefix="/api", tags=["quiz"])
 
 class AnswerRequest(BaseModel):
     selected_choices: list[int]  # Original indices
+
+class PracticeQuizRequest(BaseModel):
+    subject_id: str
+    domain_ids: list[str] | None = None  # None = all domains
+    questions_count: int = 10
 
 
 @router.get("/my-quizzes")
@@ -50,6 +56,79 @@ async def my_quizzes(
             "total_questions": q.total_questions,
         })
     return items
+
+
+@router.post("/practice-quiz")
+async def create_practice_quiz(
+    body: PracticeQuizRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Student generates a practice quiz for self-study. No session needed."""
+    import random
+    import math
+    from collections import defaultdict
+    from app.models.domain import Domain
+    import uuid as uuid_module
+
+    if user.role != "student":
+        raise HTTPException(403, "Only students can create practice quizzes")
+
+    # Get questions from selected domains (or all in subject)
+    query = select(Question).join(Domain, Question.domain_id == Domain.id).where(Domain.subject_id == body.subject_id)
+    if body.domain_ids:
+        domain_uuids = [uuid_module.UUID(d) for d in body.domain_ids]
+        query = query.where(Question.domain_id.in_(domain_uuids))
+
+    result = await db.execute(query)
+    all_questions = result.scalars().all()
+
+    if not all_questions:
+        raise HTTPException(400, "No questions available for selected domains")
+
+    target = min(body.questions_count, len(all_questions))
+    selected = random.sample(all_questions, target)
+    random.shuffle(selected)
+
+    questions_order = []
+    for q in selected:
+        num_choices = len(q.choices)
+        choices_order = list(range(num_choices))
+        random.shuffle(choices_order)
+        questions_order.append({
+            "question_id": str(q.id),
+            "choices_order": choices_order,
+        })
+
+    # Create quiz without a session (session_id = None would break FK, so we use a special marker)
+    # We'll create a practice session on the fly
+    from app.models.session import Session as SessionModel
+    practice_session = SessionModel(
+        subject_id=body.subject_id,
+        title=f"Practice — {user.full_name}",
+        created_by=user.id,
+        domain_ids=body.domain_ids or [],
+        questions_per_quiz=target,
+        is_active=False,  # Not a real session
+    )
+    db.add(practice_session)
+    await db.flush()
+
+    quiz = StudentQuiz(
+        session_id=practice_session.id,
+        student_id=user.id,
+        questions_order=questions_order,
+        total_questions=target,
+    )
+    db.add(quiz)
+    await db.commit()
+    await db.refresh(quiz)
+
+    return {
+        "quiz_id": str(quiz.id),
+        "total_questions": quiz.total_questions,
+        "is_practice": True,
+    }
 
 
 @router.post("/sessions/{session_id}/join")
@@ -312,3 +391,29 @@ async def get_quiz_results(
         total_questions=quiz.total_questions,
         results=results,
     )
+
+
+@router.delete("/quiz/{quiz_id}")
+async def delete_practice_quiz(
+    quiz_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Delete a practice quiz. Only the owning student can delete, and only practice quizzes."""
+    result = await db.execute(select(StudentQuiz).where(StudentQuiz.id == quiz_id))
+    quiz = result.scalar_one_or_none()
+    if not quiz or str(quiz.student_id) != str(user.id):
+        raise HTTPException(404, "Quiz not found")
+
+    # Verify it's a practice quiz (session is_active=False and title starts with "Practice")
+    session_result = await db.execute(select(Session).where(Session.id == quiz.session_id))
+    session = session_result.scalar_one_or_none()
+    if not session or session.is_active or not session.title.startswith("Practice"):
+        raise HTTPException(403, "Only practice quizzes can be deleted")
+
+    # Delete answers, then quiz, then the practice session (order matters for FK constraints)
+    await db.execute(sa_delete(StudentAnswer).where(StudentAnswer.student_quiz_id == quiz.id))
+    await db.execute(sa_delete(StudentQuiz).where(StudentQuiz.id == quiz.id))
+    await db.execute(sa_delete(Session).where(Session.id == session.id))
+    await db.commit()
+    return {"ok": True}

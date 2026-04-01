@@ -48,6 +48,10 @@ export const api = {
   submitQuiz: (quizId: string) => apiFetch(`/api/quiz/${quizId}/submit`, { method: "POST" }),
   getQuizResults: (quizId: string) => apiFetch(`/api/quiz/${quizId}/results`),
   getMyQuizzes: () => apiFetch("/api/my-quizzes"),
+  createPracticeQuiz: (data: { subject_id: string; domain_ids?: string[]; questions_count: number }) =>
+    apiFetch("/api/practice-quiz", { method: "POST", body: JSON.stringify(data) }),
+  deletePracticeQuiz: (quizId: string) =>
+    apiFetch(`/api/quiz/${quizId}`, { method: "DELETE" }),
 
   // Questions
   getQuestions: (subjectId: string, params?: string) => apiFetch(`/api/subjects/${subjectId}/questions${params ? `?${params}` : ""}`),

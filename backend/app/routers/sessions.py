@@ -244,13 +244,11 @@ async def get_session_questions_review(
         if sq.question:
             question_map[str(sq.question.id)] = sq.question
 
-    # Only include questions that students actually answered
+    # Include ALL session pool questions, not just answered ones
     questions = []
-    for qid, stats in q_stats.items():
-        q = question_map.get(qid)
-        if not q:
-            continue
-        rate = round(stats["correct"] / stats["total"] * 100, 1) if stats["total"] > 0 else 0
+    for qid, q in question_map.items():
+        stats = q_stats.get(qid, {"correct": 0, "total": 0, "correct_students": [], "incorrect_students": []})
+        rate = round(stats["correct"] / stats["total"] * 100, 1) if stats["total"] > 0 else None
 
         questions.append({
             "question_id": qid,
@@ -266,8 +264,8 @@ async def get_session_questions_review(
             "incorrect_students": stats["incorrect_students"],
         })
 
-    # Sort by correct_rate ascending (hardest first)
-    questions.sort(key=lambda q: q["correct_rate"])
+    # Sort: answered questions by correct_rate ascending (hardest first), unanswered at end
+    questions.sort(key=lambda q: (q["correct_rate"] is None, q["correct_rate"] or 0))
 
     return {
         "session_title": session.title,
