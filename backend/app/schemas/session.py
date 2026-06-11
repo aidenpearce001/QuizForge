@@ -33,6 +33,7 @@ class AttendanceEntry(BaseModel):
     current_question: int | None = None
     total_questions: int = 0
     score: float | None = None
+    violation_count: int = 0
 
 
 class SessionResultEntry(BaseModel):

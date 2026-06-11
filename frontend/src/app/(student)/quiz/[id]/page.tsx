@@ -63,6 +63,16 @@ export default function QuizPage() {
       .catch(() => setLoading(false));
   }, [quizId, router]);
 
+  const handleSubmitQuiz = useCallback(async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      await api.submitQuiz(quizId);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      router.push(`/results/${quizId}`);
+    } catch { setSubmitting(false); }
+  }, [submitting, quizId, router]);
+
   // Timer
   useEffect(() => {
     if (!meta?.time_limit_minutes || !meta?.started_at) return;
@@ -92,6 +102,7 @@ export default function QuizPage() {
         violationsRef.current += 1;
         setViolationCount(violationsRef.current);
         setIsBlackedOut(true);
+        api.reportViolation(quizId).catch(() => {});
       };
 
       const onVisibility = () => { if (document.hidden) flag(); else unblack(); };
@@ -176,16 +187,6 @@ export default function QuizPage() {
     } catch { /* ignore */ }
     finally { setSaving(false); }
   }
-
-  const handleSubmitQuiz = useCallback(async () => {
-    if (submitting) return;
-    setSubmitting(true);
-    try {
-      await api.submitQuiz(quizId);
-      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-      router.push(`/results/${quizId}`);
-    } catch { setSubmitting(false); }
-  }, [submitting, quizId, router]);
 
   function formatTime(seconds: number) {
     const m = Math.floor(seconds / 60);

@@ -47,6 +47,7 @@ export const api = {
   saveAnswer: (quizId: string, n: number, data: { selected_choices: number[] }) =>
     apiFetch(`/api/quiz/${quizId}/question/${n}/answer`, { method: "POST", body: JSON.stringify(data) }),
   submitQuiz: (quizId: string) => apiFetch(`/api/quiz/${quizId}/submit`, { method: "POST" }),
+  reportViolation: (quizId: string) => apiFetch(`/api/quiz/${quizId}/violation`, { method: "POST" }),
   getQuizResults: (quizId: string) => apiFetch(`/api/quiz/${quizId}/results`),
   getMyQuizzes: () => apiFetch("/api/my-quizzes"),
   createPracticeQuiz: (data: { subject_id: string; domain_ids?: string[]; questions_count: number }) =>

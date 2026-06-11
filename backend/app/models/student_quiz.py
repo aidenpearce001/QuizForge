@@ -16,5 +16,6 @@ class StudentQuiz(Base):
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     total_correct: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_questions: Mapped[int] = mapped_column(Integer)
+    violation_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     student = relationship("User", lazy="selectin")
     answers = relationship("StudentAnswer", back_populates="student_quiz", lazy="selectin")

@@ -22,6 +22,7 @@ type Attendee = {
   current_question?: number | null;
   total_questions: number;
   score?: number | null;
+  violation_count: number;
 };
 
 export default function SessionDetailPage() {
@@ -42,7 +43,7 @@ export default function SessionDetailPage() {
   useEffect(() => {
     fetchSession();
     fetchAttendance();
-    const interval = setInterval(fetchAttendance, 10000);
+    const interval = setInterval(fetchAttendance, 5000);
     return () => clearInterval(interval);
   }, [fetchSession, fetchAttendance]);
 
@@ -61,7 +62,6 @@ export default function SessionDetailPage() {
     try {
       await navigator.clipboard.writeText(session.qr_url);
     } catch {
-      // Fallback for non-HTTPS (clipboard API blocked)
       const textarea = document.createElement("textarea");
       textarea.value = session.qr_url;
       textarea.style.position = "fixed";
@@ -78,6 +78,10 @@ export default function SessionDetailPage() {
   if (!session) {
     return <p className="text-gray-400">Loading session...</p>;
   }
+
+  const violators = attendance
+    .filter((a) => a.violation_count > 0)
+    .sort((a, b) => b.violation_count - a.violation_count);
 
   const statusBadge = (a: Attendee) => {
     switch (a.status) {
@@ -114,7 +118,7 @@ export default function SessionDetailPage() {
         </span>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2 mb-6">
         {/* QR Code */}
         <div className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex flex-col items-center gap-4">
           {session.qr_code && (
@@ -165,7 +169,14 @@ export default function SessionDetailPage() {
                   key={i}
                   className="flex items-center justify-between py-1.5 border-b border-gray-800 last:border-0"
                 >
-                  <span className="text-sm text-gray-200">{a.full_name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-200">{a.full_name}</span>
+                    {a.violation_count > 0 && (
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/50 text-red-400 font-medium">
+                        ⚠ {a.violation_count}
+                      </span>
+                    )}
+                  </div>
                   {statusBadge(a)}
                 </div>
               ))}
@@ -173,6 +184,59 @@ export default function SessionDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Cheating Log */}
+      {violators.length > 0 && (
+        <div className="bg-gray-900 border border-red-800/40 rounded-lg p-4">
+          <h2 className="text-sm font-semibold text-red-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <span>⚠</span>
+            <span>Cheating Violations ({violators.length} student{violators.length !== 1 ? "s" : ""})</span>
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Recorded every time a student left the fullscreen exam window (tab switch, window blur, or fullscreen exit).
+            Updates every 5 seconds.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
+                  <th className="pb-2 pr-4">Student</th>
+                  <th className="pb-2 pr-4">Violations</th>
+                  <th className="pb-2 pr-4">Status</th>
+                  <th className="pb-2">Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {violators.map((a, i) => (
+                  <tr key={i} className="border-b border-gray-800/50 last:border-0">
+                    <td className="py-2 pr-4 text-gray-200 font-medium">{a.full_name}</td>
+                    <td className="py-2 pr-4">
+                      <span className="inline-flex items-center gap-1 text-red-400 font-bold">
+                        {a.violation_count}
+                        <span className="text-xs font-normal text-red-400/70">
+                          {a.violation_count === 1 ? "time" : "times"}
+                        </span>
+                      </span>
+                    </td>
+                    <td className="py-2 pr-4">
+                      <span className={`text-xs ${
+                        a.status === "completed" ? "text-green-400" :
+                        a.status === "in_progress" ? "text-blue-400" : "text-gray-500"
+                      }`}>
+                        {a.status === "completed" ? "Submitted" :
+                         a.status === "in_progress" ? `Q${a.current_question}/${a.total_questions}` : "Joined"}
+                      </span>
+                    </td>
+                    <td className="py-2 text-gray-300">
+                      {a.status === "completed" ? `${Math.round(a.score ?? 0)}%` : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -216,6 +216,7 @@ async def get_attendance(
                 current_question=answered if status == "in_progress" else None,
                 total_questions=q.total_questions,
                 score=q.score,
+                violation_count=q.violation_count or 0,
             )
         )
     return entries
