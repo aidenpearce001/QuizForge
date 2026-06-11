@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from sqlalchemy import delete as sa_delete
 from app.database import get_db
@@ -51,7 +51,7 @@ class AnswerRequest(BaseModel):
 class PracticeQuizRequest(BaseModel):
     subject_id: str
     domain_ids: list[str] | None = None  # None = all domains
-    questions_count: int = 10
+    questions_count: int = Field(default=10, ge=1)
 
 
 @router.get("/my-quizzes")
@@ -116,6 +116,8 @@ async def create_practice_quiz(
         raise HTTPException(400, "No questions available for selected domains")
 
     target = min(body.questions_count, len(all_questions))
+    if target <= 0:
+        raise HTTPException(400, "questions_count must be at least 1")
     selected = random.sample(all_questions, target)
     random.shuffle(selected)
 
