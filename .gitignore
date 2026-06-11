@@ -32,3 +32,6 @@ data/
 
 # Superpowers
 .superpowers/
+
+# Docs
+*.md

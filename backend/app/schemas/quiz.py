@@ -9,6 +9,7 @@ class QuizMetaResponse(BaseModel):
     time_limit_minutes: int | None
     started_at: str
     submitted_at: str | None
+    is_practice: bool = False
 
 
 class QuizQuestionResponse(BaseModel):

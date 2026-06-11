@@ -19,18 +19,21 @@ async def generate_quiz_for_student(
     2. Select proportional random subset (largest-remainder method)
     3. Shuffle order and choices
     """
-    # Check if student already has a quiz
+    # Check if student already has a quiz (use first() to survive duplicate rows)
     existing = await db.execute(
-        select(StudentQuiz).where(
+        select(StudentQuiz)
+        .where(
             StudentQuiz.session_id == session.id,
             StudentQuiz.student_id == student_id,
         )
+        .order_by(StudentQuiz.started_at.desc())
+        .limit(1)
     )
     existing_quiz = existing.scalar_one_or_none()
     if existing_quiz:
         return existing_quiz
 
-    # Fetch pool grouped by domain
+    # Fetch pool
     result = await db.execute(
         select(Question)
         .join(SessionQuestion, SessionQuestion.question_id == Question.id)
@@ -38,16 +41,34 @@ async def generate_quiz_for_student(
     )
     all_questions = result.scalars().all()
 
-    by_domain = defaultdict(list)
-    for q in all_questions:
-        by_domain[str(q.domain_id)].append(q)
-
     total_pool = len(all_questions)
     target = min(session.questions_per_quiz, total_pool)
 
-    # Proportional selection with largest-remainder method
     selected = []
-    if total_pool > 0:
+    if total_pool > 0 and session.exam_ratio is not None:
+        # Weighted sampling: exam_ratio% from exam questions, rest from domain bank
+        exam_qs = [q for q in all_questions if q.for_exam]
+        domain_qs = [q for q in all_questions if not q.for_exam]
+
+        target_exam = min(round(target * session.exam_ratio / 100), len(exam_qs))
+        target_domain = min(target - target_exam, len(domain_qs))
+        # Fill any remaining slots from whichever group has more
+        shortage = target - target_exam - target_domain
+        if shortage > 0:
+            extra_exam = min(shortage, len(exam_qs) - target_exam)
+            target_exam += extra_exam
+            target_domain = min(target - target_exam, len(domain_qs))
+
+        selected = (
+            random.sample(exam_qs, target_exam)
+            + random.sample(domain_qs, target_domain)
+        )
+    elif total_pool > 0:
+        # Proportional selection by domain with largest-remainder method
+        by_domain = defaultdict(list)
+        for q in all_questions:
+            by_domain[str(q.domain_id)].append(q)
+
         allocations = {}
         remainders = {}
         allocated = 0
@@ -66,7 +87,6 @@ async def generate_quiz_for_student(
         for i in range(remaining):
             allocations[sorted_domains[i % len(sorted_domains)]] += 1
 
-        # Random sample from each domain
         for domain_id, count in allocations.items():
             pool = by_domain[domain_id]
             count = min(count, len(pool))

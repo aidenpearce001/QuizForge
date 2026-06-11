@@ -43,6 +43,7 @@ async def list_questions(
             question_type=q.question_type,
             choices=[ChoiceSchema(**c) for c in q.choices],
             explanation=q.explanation,
+            for_exam=q.for_exam,
             source=q.source,
             created_at=q.created_at.isoformat(),
         )
@@ -72,6 +73,7 @@ async def create_question(
         question_type=body.question_type,
         choices=[c.model_dump() for c in body.choices],
         explanation=body.explanation,
+        for_exam=body.for_exam,
     )
     db.add(question)
     await db.commit()
@@ -84,6 +86,7 @@ async def create_question(
         question_type=question.question_type,
         choices=[ChoiceSchema(**c) for c in question.choices],
         explanation=question.explanation,
+        for_exam=question.for_exam,
         source=question.source,
         created_at=question.created_at.isoformat(),
     )
@@ -111,6 +114,7 @@ async def get_question(
         question_type=q.question_type,
         choices=[ChoiceSchema(**c) for c in q.choices],
         explanation=q.explanation,
+        for_exam=q.for_exam,
         source=q.source,
         created_at=q.created_at.isoformat(),
     )
@@ -141,6 +145,8 @@ async def update_question(
         q.explanation = body.explanation
     if body.domain_id is not None:
         q.domain_id = body.domain_id
+    if body.for_exam is not None:
+        q.for_exam = body.for_exam
     await db.commit()
     await db.refresh(q)
     # Re-load domain relationship after refresh
@@ -154,6 +160,7 @@ async def update_question(
         question_type=q.question_type,
         choices=[ChoiceSchema(**c) for c in q.choices],
         explanation=q.explanation,
+        for_exam=q.for_exam,
         source=q.source,
         created_at=q.created_at.isoformat(),
     )

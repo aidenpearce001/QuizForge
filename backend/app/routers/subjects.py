@@ -62,7 +62,11 @@ async def list_domains(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(Domain, func.count(Question.id).label("qcount"))
+        select(
+            Domain,
+            func.count(Question.id).label("qcount"),
+            func.count(Question.id).filter(Question.for_exam.is_(True)).label("exam_qcount"),
+        )
         .outerjoin(Question, Question.domain_id == Domain.id)
         .where(Domain.subject_id == subject_id)
         .group_by(Domain.id)
@@ -76,6 +80,7 @@ async def list_domains(
             name=row[0].name,
             description=row[0].description,
             question_count=row[1],
+            exam_question_count=row[2],
         )
         for row in result.all()
     ]

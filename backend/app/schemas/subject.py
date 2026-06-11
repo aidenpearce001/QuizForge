@@ -21,6 +21,7 @@ class DomainInSubject(BaseModel):
     name: str
     description: str | None
     question_count: int = 0
+    exam_question_count: int = 0
 
     class Config:
         from_attributes = True

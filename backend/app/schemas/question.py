@@ -12,6 +12,7 @@ class QuestionCreate(BaseModel):
     question_type: str = "single"
     choices: list[ChoiceSchema]
     explanation: str | None = None
+    for_exam: bool = False
 
 
 class QuestionUpdate(BaseModel):
@@ -20,6 +21,7 @@ class QuestionUpdate(BaseModel):
     choices: list[ChoiceSchema] | None = None
     explanation: str | None = None
     domain_id: str | None = None
+    for_exam: bool | None = None
 
 
 class QuestionResponse(BaseModel):
@@ -30,6 +32,7 @@ class QuestionResponse(BaseModel):
     question_type: str
     choices: list[ChoiceSchema]
     explanation: str | None
+    for_exam: bool
     source: str
     created_at: str
 

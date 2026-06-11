@@ -17,7 +17,7 @@ async def register(body: RegisterRequest, response: Response, db: AsyncSession =
         raise HTTPException(status_code=409, detail="Username already taken")
     user = await create_student(db, body.full_name, body.username, body.password)
     token = create_token(str(user.id), user.role)
-    response.set_cookie("token", token, httponly=True, samesite="lax", max_age=86400)
+    response.set_cookie("token", token, httponly=True, samesite="lax", max_age=604800)
     return AuthResponse(token=token, user=UserResponse.from_user(user))
 
 @router.post("/login", response_model=AuthResponse)
@@ -26,7 +26,7 @@ async def login(body: LoginRequest, response: Response, db: AsyncSession = Depen
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     token = create_token(str(user.id), user.role)
-    response.set_cookie("token", token, httponly=True, samesite="lax", max_age=86400)
+    response.set_cookie("token", token, httponly=True, samesite="lax", max_age=604800)
     return AuthResponse(token=token, user=UserResponse.from_user(user))
 
 @router.get("/me", response_model=UserResponse)

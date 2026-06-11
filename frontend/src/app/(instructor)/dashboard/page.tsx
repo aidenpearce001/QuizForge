@@ -9,6 +9,7 @@ type Session = {
   subject_name?: string;
   question_count: number;
   is_active: boolean;
+  session_type?: "normal" | "exam";
   created_at: string;
 };
 
@@ -52,15 +53,22 @@ export default function DashboardPage() {
                 >
                   {s.title}
                 </Link>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded ${
-                    s.is_active
-                      ? "bg-green-900/50 text-green-400"
-                      : "bg-gray-800 text-gray-500"
-                  }`}
-                >
-                  {s.is_active ? "Active" : "Closed"}
-                </span>
+                <div className="flex gap-1 flex-shrink-0">
+                  {s.session_type === "exam" && (
+                    <span className="text-xs px-2 py-0.5 rounded bg-amber-900/50 text-amber-400">
+                      Exam
+                    </span>
+                  )}
+                  <span
+                    className={`text-xs px-2 py-0.5 rounded ${
+                      s.is_active
+                        ? "bg-green-900/50 text-green-400"
+                        : "bg-gray-800 text-gray-500"
+                    }`}
+                  >
+                    {s.is_active ? "Active" : "Closed"}
+                  </span>
+                </div>
               </div>
               {s.subject_name && (
                 <p className="text-xs text-gray-500">{s.subject_name}</p>

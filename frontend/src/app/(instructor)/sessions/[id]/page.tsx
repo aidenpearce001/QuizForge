@@ -8,6 +8,7 @@ type SessionDetail = {
   id: string;
   title: string;
   is_active: boolean;
+  session_type?: "normal" | "exam";
   qr_code: string;
   qr_url: string;
   question_count: number;
@@ -97,6 +98,11 @@ export default function SessionDetailPage() {
     <div>
       <div className="flex items-center gap-3 mb-6">
         <h1 className="text-2xl font-semibold">{session.title}</h1>
+        {session.session_type === "exam" && (
+          <span className="text-xs px-2 py-0.5 rounded bg-amber-900/50 text-amber-400">
+            Exam Day
+          </span>
+        )}
         <span
           className={`text-xs px-2 py-0.5 rounded ${
             session.is_active

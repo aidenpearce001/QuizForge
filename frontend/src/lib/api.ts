@@ -32,7 +32,8 @@ export const api = {
   // Sessions
   getSessions: () => apiFetch("/api/sessions"),
   getSession: (id: string) => apiFetch(`/api/sessions/${id}`),
-  createSession: (data: any) => apiFetch("/api/sessions", { method: "POST", body: JSON.stringify(data) }),
+  createSession: (data: { title: string; subject_id: string; domain_ids: string[]; questions_per_quiz: number; time_limit_minutes?: number | null; session_type?: "normal" | "exam"; exam_ratio?: number | null }) =>
+    apiFetch("/api/sessions", { method: "POST", body: JSON.stringify(data) }),
   toggleSession: (id: string) => apiFetch(`/api/sessions/${id}/toggle`, { method: "PUT" }),
   getAttendance: (id: string) => apiFetch(`/api/sessions/${id}/attendance`),
   getResults: (id: string) => apiFetch(`/api/sessions/${id}/results`),

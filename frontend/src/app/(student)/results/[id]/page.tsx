@@ -3,6 +3,22 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { BilingualText } from "@/components/BilingualText";
+
+function enOnly(s: string, sep: string) {
+  const idx = s.indexOf(sep);
+  return idx === -1 ? s : s.slice(0, idx);
+}
+
+const SCORE_COLORS = {
+  high: { text: "text-green-400", bg: "bg-green-400" },
+  mid:  { text: "text-yellow-400", bg: "bg-yellow-400" },
+  low:  { text: "text-red-400",   bg: "bg-red-400"   },
+} as const;
+
+function scoreLevel(pct: number) {
+  return pct >= 70 ? SCORE_COLORS.high : pct >= 50 ? SCORE_COLORS.mid : SCORE_COLORS.low;
+}
 
 type QuestionResult = {
   question_number: number;
@@ -116,20 +132,20 @@ export default function ResultsPage() {
     text += "Question Review:\n---\n";
     for (const q of data.results) {
       const status = q.is_correct ? "CORRECT" : "WRONG";
-      text += `Q${q.question_number}. [${status}] ${q.question_text}\n`;
+      text += `Q${q.question_number}. [${status}] ${enOnly(q.question_text, "\n\n")}\n`;
       for (let i = 0; i < q.choices.length; i++) {
         const wasSelected = q.selected_choices.includes(i);
         if (wasSelected) {
           const letter = String.fromCharCode(65 + i);
           const mark = q.choices[i].is_correct ? "\u2713" : "\u2717";
-          text += `   Your answer: ${letter}. ${q.choices[i].text} ${mark}\n`;
+          text += `   Your answer: ${letter}. ${enOnly(q.choices[i].text, "\n")} ${mark}\n`;
         }
       }
       if (!q.is_correct) {
         for (let i = 0; i < q.choices.length; i++) {
           if (q.choices[i].is_correct) {
             const letter = String.fromCharCode(65 + i);
-            text += `   Correct: ${letter}. ${q.choices[i].text}\n`;
+            text += `   Correct: ${letter}. ${enOnly(q.choices[i].text, "\n")}\n`;
           }
         }
         if (q.explanation) {
@@ -149,25 +165,12 @@ export default function ResultsPage() {
     URL.revokeObjectURL(url);
   }
 
-  function scoreColor(pct: number) {
-    if (pct >= 70) return "text-green-400";
-    if (pct >= 50) return "text-yellow-400";
-    return "text-red-400";
-  }
-
-  function scoreBgColor(pct: number) {
-    if (pct >= 70) return "bg-green-400";
-    if (pct >= 50) return "bg-yellow-400";
-    return "bg-red-400";
-  }
-
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-3xl mx-auto px-4 py-8">
-        {/* Score Header */}
         <div className="text-center mb-10">
           <h1 className="text-lg text-gray-400 mb-2">Quiz Complete</h1>
-          <p className={`text-7xl font-bold ${scoreColor(data.score)}`}>
+          <p className={`text-7xl font-bold ${scoreLevel(data.score).text}`}>
             {Math.round(data.score)}%
           </p>
           <p className="text-gray-400 mt-3">
@@ -190,7 +193,7 @@ export default function ResultsPage() {
                     </div>
                     <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${scoreBgColor(pct)}`}
+                        className={`h-full rounded-full ${scoreLevel(pct).bg}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -216,7 +219,9 @@ export default function ResultsPage() {
                     {q.question_number}
                   </span>
                   <div>
-                    <p className="text-gray-200 leading-relaxed">{q.question_text}</p>
+                    <p className="text-gray-200 leading-relaxed font-medium">
+                      <BilingualText text={q.question_text} sep={"\n\n"} variant="question" />
+                    </p>
                     <span className="text-xs text-blue-400 bg-blue-900/30 px-2 py-0.5 rounded mt-1 inline-block">{q.domain_name}</span>
                   </div>
                 </div>
@@ -239,20 +244,24 @@ export default function ResultsPage() {
                     return (
                       <div
                         key={idx}
-                        className={`px-4 py-2.5 rounded-lg border text-sm ${borderClass} ${bgClass}`}
+                        className={`px-4 py-2.5 rounded-lg border ${borderClass} ${bgClass}`}
                       >
-                        <span className="font-medium text-gray-500 mr-2">
-                          {String.fromCharCode(65 + idx)}.
-                        </span>
-                        <span className={isRight ? "text-green-300" : wasSelected ? "text-red-300" : "text-gray-400"}>
-                          {c.text}
-                        </span>
-                        {isRight && (
-                          <span className="ml-2 text-xs text-green-400">Correct</span>
-                        )}
-                        {wasSelected && (
-                          <span className="ml-2 text-xs text-gray-500">(your answer)</span>
-                        )}
+                        <div className="flex gap-2 items-start">
+                          <span className="font-medium text-gray-500 shrink-0 text-sm pt-0.5">
+                            {String.fromCharCode(65 + idx)}.
+                          </span>
+                          <div className={`flex-1 min-w-0 text-sm ${isRight ? "text-green-300" : wasSelected ? "text-red-300" : "text-gray-400"}`}>
+                            <BilingualText text={c.text} sep={"\n"} variant="choice" />
+                          </div>
+                          <div className="shrink-0 flex flex-col items-end gap-0.5">
+                            {isRight && (
+                              <span className="text-xs text-green-400 font-medium">✓ Correct</span>
+                            )}
+                            {wasSelected && (
+                              <span className="text-xs text-gray-500">your answer</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     );
                   })}

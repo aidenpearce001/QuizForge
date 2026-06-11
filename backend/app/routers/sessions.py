@@ -2,6 +2,7 @@ import io
 import uuid as uuid_module
 import qrcode
 import base64
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +38,10 @@ async def create_session(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_instructor),
 ):
+    exam_ratio = None
+    if body.session_type == "exam" and body.exam_ratio is not None:
+        exam_ratio = max(0, min(100, body.exam_ratio))
+
     session = Session(
         subject_id=body.subject_id,
         title=body.title,
@@ -44,18 +49,30 @@ async def create_session(
         domain_ids=body.domain_ids,
         questions_per_quiz=body.questions_per_quiz,
         time_limit_minutes=body.time_limit_minutes,
+        session_type=body.session_type,
+        exam_ratio=exam_ratio,
+        activated_at=datetime.now(timezone.utc),
     )
     db.add(session)
     await db.flush()
 
-    # [C3] Convert string domain_ids to UUIDs for the query
     domain_uuids = [uuid_module.UUID(d) for d in body.domain_ids]
-    result = await db.execute(
-        select(Question).where(Question.domain_id.in_(domain_uuids))
-    )
-    questions = result.scalars().all()
-    for q in questions:
-        db.add(SessionQuestion(session_id=session.id, question_id=q.id))
+
+    if body.session_type == "exam" and (exam_ratio is None or exam_ratio == 100):
+        result = await db.execute(
+            select(Question.id).where(
+                Question.domain_id.in_(domain_uuids),
+                Question.for_exam.is_(True),
+            )
+        )
+    else:
+        result = await db.execute(
+            select(Question.id).where(Question.domain_id.in_(domain_uuids))
+        )
+    question_ids = result.scalars().all()
+
+    for qid in question_ids:
+        db.add(SessionQuestion(session_id=session.id, question_id=qid))
 
     await db.commit()
     await db.refresh(session)
@@ -68,8 +85,10 @@ async def create_session(
         questions_per_quiz=session.questions_per_quiz,
         time_limit_minutes=session.time_limit_minutes,
         is_active=session.is_active,
+        session_type=session.session_type,
+        exam_ratio=session.exam_ratio,
         created_at=session.created_at.isoformat(),
-        question_pool_size=len(questions),
+        question_pool_size=len(question_ids),
     )
 
 
@@ -80,14 +99,15 @@ async def list_sessions(
 ):
     result = await db.execute(select(Session).order_by(Session.created_at.desc()))
     sessions = result.scalars().all()
+
+    counts_result = await db.execute(
+        select(SessionQuestion.session_id, func.count(SessionQuestion.id))
+        .group_by(SessionQuestion.session_id)
+    )
+    pool_sizes = {str(sid): cnt for sid, cnt in counts_result.all()}
+
     responses = []
     for s in sessions:
-        pool_result = await db.execute(
-            select(func.count(SessionQuestion.id)).where(
-                SessionQuestion.session_id == s.id
-            )
-        )
-        pool_size = pool_result.scalar()
         responses.append(
             SessionResponse(
                 id=str(s.id),
@@ -97,8 +117,10 @@ async def list_sessions(
                 questions_per_quiz=s.questions_per_quiz,
                 time_limit_minutes=s.time_limit_minutes,
                 is_active=s.is_active,
+                session_type=s.session_type,
+                exam_ratio=s.exam_ratio,
                 created_at=s.created_at.isoformat(),
-                question_pool_size=pool_size,
+                question_pool_size=pool_sizes.get(str(s.id), 0),
             )
         )
     return responses
@@ -130,6 +152,8 @@ async def get_session(session_id: str, db: AsyncSession = Depends(get_db)):
         "questions_per_quiz": session.questions_per_quiz,
         "time_limit_minutes": session.time_limit_minutes,
         "is_active": session.is_active,
+        "session_type": session.session_type,
+        "exam_ratio": session.exam_ratio,
         "created_at": session.created_at.isoformat(),
         "question_pool_size": pool_size,
         "qr_code": qr_base64,
@@ -148,6 +172,8 @@ async def toggle_session(
     if not session:
         raise HTTPException(404, "Session not found")
     session.is_active = not session.is_active
+    if session.is_active:
+        session.activated_at = datetime.now(timezone.utc)
     await db.commit()
     return {"is_active": session.is_active}
 
@@ -162,15 +188,18 @@ async def get_attendance(
         select(StudentQuiz).where(StudentQuiz.session_id == session_id)
     )
     quizzes = result.scalars().all()
+
+    quiz_ids = [q.id for q in quizzes]
+    ans_counts_result = await db.execute(
+        select(StudentAnswer.student_quiz_id, func.count(StudentAnswer.id))
+        .where(StudentAnswer.student_quiz_id.in_(quiz_ids))
+        .group_by(StudentAnswer.student_quiz_id)
+    )
+    answered_counts = {str(qid): cnt for qid, cnt in ans_counts_result.all()}
+
     entries = []
     for q in quizzes:
-        # Count answered questions
-        ans_result = await db.execute(
-            select(func.count(StudentAnswer.id)).where(
-                StudentAnswer.student_quiz_id == q.id
-            )
-        )
-        answered = ans_result.scalar()
+        answered = answered_counts.get(str(q.id), 0)
 
         if q.submitted_at:
             status = "completed"
@@ -330,10 +359,10 @@ async def get_results(
     )
     quizzes = result.scalars().all()
 
-    # [I4] Track per-question correct counts for hardest question metric
     question_correct_counts: dict[str, int] = {}
     question_total_counts: dict[str, int] = {}
     question_text_map: dict[str, str] = {}
+    question_student_names: dict[str, dict[str, list]] = {}
 
     entries = []
     for q in quizzes:
@@ -341,7 +370,6 @@ async def get_results(
         if q.submitted_at and q.started_at:
             time_taken = int((q.submitted_at - q.started_at).total_seconds())
 
-        # Domain breakdown
         domain_scores: dict[str, dict] = {}
         for a in q.answers:
             domain_name = a.question.domain.name if a.question.domain else "Unknown"
@@ -351,7 +379,6 @@ async def get_results(
             if a.is_correct:
                 domain_scores[domain_name]["correct"] += 1
 
-            # Track for hardest question
             qid = str(a.question_id)
             question_total_counts[qid] = question_total_counts.get(qid, 0) + 1
             if a.is_correct:
@@ -359,6 +386,12 @@ async def get_results(
             else:
                 question_correct_counts.setdefault(qid, 0)
             question_text_map[qid] = a.question.question_text
+
+            names = question_student_names.setdefault(qid, {"correct": [], "incorrect": []})
+            if a.is_correct:
+                names["correct"].append(q.student.full_name)
+            else:
+                names["incorrect"].append(q.student.full_name)
 
         entries.append(
             SessionResultEntry(
@@ -374,7 +407,6 @@ async def get_results(
 
     sorted_entries = sorted(entries, key=lambda e: e.score, reverse=True)
 
-    # [I4] Compute hardest question
     hardest_question = None
     if question_total_counts:
         hardest_qid = min(
@@ -391,32 +423,21 @@ async def get_results(
             "total_attempts": total,
         }
 
-    # Build per-question stats with who answered correctly
     question_stats = []
     for qid in question_total_counts:
         total = question_total_counts[qid]
         correct = question_correct_counts.get(qid, 0)
-        # Find who answered this question correctly/incorrectly
-        correct_students = []
-        incorrect_students = []
-        for q in quizzes:
-            for a in q.answers:
-                if str(a.question_id) == qid:
-                    if a.is_correct:
-                        correct_students.append(q.student.full_name)
-                    else:
-                        incorrect_students.append(q.student.full_name)
+        names = question_student_names.get(qid, {"correct": [], "incorrect": []})
         question_stats.append({
             "question_id": qid,
             "question_text": question_text_map.get(qid, ""),
             "correct_rate": round(correct / total * 100, 1) if total > 0 else 0,
             "total_attempts": total,
             "correct_count": correct,
-            "correct_students": correct_students,
-            "incorrect_students": incorrect_students,
+            "correct_students": names["correct"],
+            "incorrect_students": names["incorrect"],
         })
 
-    # Sort by correct_rate ascending (hardest first)
     question_stats.sort(key=lambda q: q["correct_rate"])
 
     return {

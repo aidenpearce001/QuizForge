@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,32 @@ from app.services.grading import grade_quiz, check_answer
 from app.schemas.quiz import QuizMetaResponse, QuizQuestionResponse, SubmitResponse
 
 router = APIRouter(prefix="/api", tags=["quiz"])
+
+
+async def _build_quiz_results(quiz: StudentQuiz, db: AsyncSession) -> list[dict]:
+    """Bulk-fetch questions and answers for a quiz, avoiding N+1 queries."""
+    qids = [entry["question_id"] for entry in quiz.questions_order]
+    q_result = await db.execute(select(Question).where(Question.id.in_(qids)))
+    questions_by_id = {str(q.id): q for q in q_result.scalars().all()}
+    ans_result = await db.execute(
+        select(StudentAnswer).where(StudentAnswer.student_quiz_id == quiz.id)
+    )
+    answers_by_qid = {str(a.question_id): a for a in ans_result.scalars().all()}
+    results = []
+    for i, entry in enumerate(quiz.questions_order):
+        qid = entry["question_id"]
+        q = questions_by_id.get(qid)
+        a = answers_by_qid.get(qid)
+        results.append({
+            "question_number": i + 1,
+            "question_text": q.question_text if q else "",
+            "domain_name": q.domain.name if q and q.domain else "",
+            "choices": q.choices if q else [],
+            "selected_choices": a.selected_choices if a else [],
+            "is_correct": a.is_correct if a else False,
+            "explanation": q.explanation if q else None,
+        })
+    return results
 
 
 class AnswerRequest(BaseModel):
@@ -41,10 +67,13 @@ async def my_quizzes(
     )
     quizzes = result.scalars().all()
 
+    session_ids = {q.session_id for q in quizzes}
+    sess_result = await db.execute(select(Session).where(Session.id.in_(session_ids)))
+    sessions_by_id = {s.id: s for s in sess_result.scalars().all()}
+
     items = []
     for q in quizzes:
-        session_result = await db.execute(select(Session).where(Session.id == q.session_id))
-        session = session_result.scalar_one_or_none()
+        session = sessions_by_id.get(q.session_id)
         items.append({
             "quiz_id": str(q.id),
             "session_id": str(q.session_id),
@@ -147,6 +176,12 @@ async def join_session(
     if not session.is_active:
         raise HTTPException(400, "Session is not active")
 
+    # Enforce session-level time limit: block new joins after time has expired
+    if session.time_limit_minutes and session.activated_at:
+        elapsed = (datetime.now(timezone.utc) - session.activated_at).total_seconds()
+        if elapsed > session.time_limit_minutes * 60:
+            raise HTTPException(400, "Exam time has expired. No new submissions accepted.")
+
     quiz = await generate_quiz_for_student(db, session, str(user.id))
     return {
         "quiz_id": str(quiz.id),
@@ -170,6 +205,15 @@ async def get_quiz_meta(
     )
     session = session_result.scalar_one_or_none()
 
+    # Auto-submit server-side if student's time has expired
+    if not quiz.submitted_at and session and session.time_limit_minutes and quiz.started_at:
+        elapsed = (datetime.now(timezone.utc) - quiz.started_at).total_seconds()
+        if elapsed > session.time_limit_minutes * 60:
+            await grade_quiz(db, quiz)
+            await db.commit()
+            await db.refresh(quiz)
+
+    is_practice = bool(session and (not session.is_active or session.title.startswith("Practice")))
     return QuizMetaResponse(
         quiz_id=str(quiz.id),
         session_id=str(quiz.session_id),
@@ -178,6 +222,7 @@ async def get_quiz_meta(
         time_limit_minutes=session.time_limit_minutes if session else None,
         started_at=quiz.started_at.isoformat(),
         submitted_at=quiz.submitted_at.isoformat() if quiz.submitted_at else None,
+        is_practice=is_practice,
     )
 
 
@@ -299,45 +344,8 @@ async def submit_quiz(
     if quiz.submitted_at:
         raise HTTPException(400, "Quiz already submitted")
 
-    # [C1] Time limit enforcement
-    session_result = await db.execute(
-        select(Session).where(Session.id == quiz.session_id)
-    )
-    session = session_result.scalar_one_or_none()
-    if session and session.time_limit_minutes:
-        deadline = quiz.started_at + timedelta(
-            minutes=session.time_limit_minutes, seconds=30
-        )
-        # Still accept but the submitted_at will show it was late
-
     grade_result = await grade_quiz(db, quiz)
-
-    # Build per-question results for review
-    results = []
-    for i, order_entry in enumerate(quiz.questions_order):
-        qid = order_entry["question_id"]
-        q_result = await db.execute(select(Question).where(Question.id == qid))
-        question = q_result.scalar_one_or_none()
-
-        ans_result = await db.execute(
-            select(StudentAnswer).where(
-                StudentAnswer.student_quiz_id == quiz.id,
-                StudentAnswer.question_id == qid,
-            )
-        )
-        answer = ans_result.scalar_one_or_none()
-
-        results.append(
-            {
-                "question_number": i + 1,
-                "question_text": question.question_text,
-                "domain_name": question.domain.name if question.domain else "",
-                "choices": question.choices,  # Full choices with is_correct
-                "selected_choices": answer.selected_choices if answer else [],
-                "is_correct": answer.is_correct if answer else False,
-                "explanation": question.explanation,
-            }
-        )
+    results = await _build_quiz_results(quiz, db)
 
     return SubmitResponse(
         score=grade_result["score"],
@@ -361,29 +369,7 @@ async def get_quiz_results(
     if not quiz.submitted_at:
         raise HTTPException(400, "Quiz not yet submitted")
 
-    results = []
-    for i, order_entry in enumerate(quiz.questions_order):
-        qid = order_entry["question_id"]
-        q_result = await db.execute(select(Question).where(Question.id == qid))
-        question = q_result.scalar_one_or_none()
-
-        ans_result = await db.execute(
-            select(StudentAnswer).where(
-                StudentAnswer.student_quiz_id == quiz.id,
-                StudentAnswer.question_id == qid,
-            )
-        )
-        answer = ans_result.scalar_one_or_none()
-
-        results.append({
-            "question_number": i + 1,
-            "question_text": question.question_text,
-            "domain_name": question.domain.name if question.domain else "",
-            "choices": question.choices,
-            "selected_choices": answer.selected_choices if answer else [],
-            "is_correct": answer.is_correct if answer else False,
-            "explanation": question.explanation,
-        })
+    results = await _build_quiz_results(quiz, db)
 
     return SubmitResponse(
         score=quiz.score or 0,
