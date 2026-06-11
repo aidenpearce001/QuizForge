@@ -381,21 +381,30 @@ async def get_quiz_results(
     )
 
 
+class ViolationRequest(BaseModel):
+    type: str = "unknown"  # "fullscreen", "tab", "window"
+
+
 @router.post("/quiz/{quiz_id}/violation")
 async def report_violation(
     quiz_id: str,
+    body: ViolationRequest,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """Record a tab-switch / focus-loss violation for this quiz. Idempotent — only counts while quiz is active."""
+    """Record a cheating violation. type is one of: fullscreen, tab, window."""
     result = await db.execute(select(StudentQuiz).where(StudentQuiz.id == quiz_id))
     quiz = result.scalar_one_or_none()
     if not quiz or str(quiz.student_id) != str(user.id):
         raise HTTPException(404, "Quiz not found")
     if not quiz.submitted_at:
         quiz.violation_count = (quiz.violation_count or 0) + 1
+        details = dict(quiz.violation_details or {})
+        key = body.type if body.type in ("fullscreen", "tab", "window") else "other"
+        details[key] = details.get(key, 0) + 1
+        quiz.violation_details = details
         await db.commit()
-    return {"violation_count": quiz.violation_count}
+    return {"violation_count": quiz.violation_count, "violation_details": quiz.violation_details}
 
 
 @router.delete("/quiz/{quiz_id}")

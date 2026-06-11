@@ -34,6 +34,7 @@ class AttendanceEntry(BaseModel):
     total_questions: int = 0
     score: float | None = None
     violation_count: int = 0
+    violation_details: dict = {}
 
 
 class SessionResultEntry(BaseModel):

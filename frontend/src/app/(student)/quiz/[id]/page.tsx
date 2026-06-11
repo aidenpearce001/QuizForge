@@ -96,19 +96,19 @@ export default function QuizPage() {
 
     // Small delay to avoid false positives from the fullscreen transition
     const setup = setTimeout(() => {
-      const flag = () => {
+      const flag = (type: "fullscreen" | "tab" | "window") => {
         if (isBlackedOutRef.current) return;
         isBlackedOutRef.current = true;
         violationsRef.current += 1;
         setViolationCount(violationsRef.current);
         setIsBlackedOut(true);
-        api.reportViolation(quizId).catch(() => {});
+        api.reportViolation(quizId, type).catch(() => {});
       };
 
-      const onVisibility = () => { if (document.hidden) flag(); else unblack(); };
-      const onBlur = () => flag();
+      const onVisibility = () => { if (document.hidden) flag("tab"); else unblack(); };
+      const onBlur = () => flag("window");
       const onFocus = () => unblack();
-      const onFullscreenChange = () => { if (!document.fullscreenElement) flag(); };
+      const onFullscreenChange = () => { if (!document.fullscreenElement) flag("fullscreen"); };
       const onKeyDown = (e: KeyboardEvent) => {
         if (
           e.key === "F12" ||

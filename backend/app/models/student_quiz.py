@@ -17,5 +17,6 @@ class StudentQuiz(Base):
     total_correct: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_questions: Mapped[int] = mapped_column(Integer)
     violation_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    violation_details: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
     student = relationship("User", lazy="selectin")
     answers = relationship("StudentAnswer", back_populates="student_quiz", lazy="selectin")

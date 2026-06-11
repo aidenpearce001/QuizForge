@@ -217,6 +217,7 @@ async def get_attendance(
                 total_questions=q.total_questions,
                 score=q.score,
                 violation_count=q.violation_count or 0,
+                violation_details=q.violation_details or {},
             )
         )
     return entries

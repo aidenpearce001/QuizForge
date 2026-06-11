@@ -15,6 +15,12 @@ type SessionDetail = {
   subject_name?: string;
 };
 
+type ViolationDetails = {
+  fullscreen?: number;
+  tab?: number;
+  window?: number;
+};
+
 type Attendee = {
   student_id: string;
   full_name: string;
@@ -23,6 +29,7 @@ type Attendee = {
   total_questions: number;
   score?: number | null;
   violation_count: number;
+  violation_details: ViolationDetails;
 };
 
 export default function SessionDetailPage() {
@@ -82,6 +89,14 @@ export default function SessionDetailPage() {
   const violators = attendance
     .filter((a) => a.violation_count > 0)
     .sort((a, b) => b.violation_count - a.violation_count);
+
+  const violationTooltip = (d: ViolationDetails) => {
+    const lines: string[] = [];
+    if (d.fullscreen) lines.push(`Exited fullscreen: ${d.fullscreen}×`);
+    if (d.tab) lines.push(`Switched tab: ${d.tab}×`);
+    if (d.window) lines.push(`Switched window: ${d.window}×`);
+    return lines.length ? lines.join("\n") : null;
+  };
 
   const statusBadge = (a: Attendee) => {
     switch (a.status) {
@@ -172,8 +187,23 @@ export default function SessionDetailPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-gray-200">{a.full_name}</span>
                     {a.violation_count > 0 && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/50 text-red-400 font-medium">
-                        ⚠ {a.violation_count}
+                      <span className="group relative">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-red-900/50 text-red-400 font-medium cursor-default">
+                          ⚠ {a.violation_count}
+                        </span>
+                        {violationTooltip(a.violation_details) && (
+                          <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-20 hidden group-hover:flex flex-col gap-0.5 bg-gray-800 border border-gray-700 rounded px-2.5 py-2 text-xs text-gray-200 whitespace-nowrap shadow-lg">
+                            {a.violation_details.fullscreen ? (
+                              <span>🖥 Exited fullscreen: <b>{a.violation_details.fullscreen}×</b></span>
+                            ) : null}
+                            {a.violation_details.tab ? (
+                              <span>🔁 Switched tab: <b>{a.violation_details.tab}×</b></span>
+                            ) : null}
+                            {a.violation_details.window ? (
+                              <span>🪟 Switched window: <b>{a.violation_details.window}×</b></span>
+                            ) : null}
+                          </span>
+                        )}
                       </span>
                     )}
                   </div>
@@ -201,7 +231,8 @@ export default function SessionDetailPage() {
               <thead>
                 <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
                   <th className="pb-2 pr-4">Student</th>
-                  <th className="pb-2 pr-4">Violations</th>
+                  <th className="pb-2 pr-6">Total</th>
+                  <th className="pb-2 pr-4">Breakdown</th>
                   <th className="pb-2 pr-4">Status</th>
                   <th className="pb-2">Score</th>
                 </tr>
@@ -210,13 +241,24 @@ export default function SessionDetailPage() {
                 {violators.map((a, i) => (
                   <tr key={i} className="border-b border-gray-800/50 last:border-0">
                     <td className="py-2 pr-4 text-gray-200 font-medium">{a.full_name}</td>
+                    <td className="py-2 pr-6">
+                      <span className="text-red-400 font-bold">{a.violation_count}</span>
+                    </td>
                     <td className="py-2 pr-4">
-                      <span className="inline-flex items-center gap-1 text-red-400 font-bold">
-                        {a.violation_count}
-                        <span className="text-xs font-normal text-red-400/70">
-                          {a.violation_count === 1 ? "time" : "times"}
-                        </span>
-                      </span>
+                      <div className="flex flex-col gap-0.5 text-xs text-gray-400">
+                        {a.violation_details.fullscreen ? (
+                          <span>🖥 Fullscreen exit: <span className="text-red-400 font-medium">{a.violation_details.fullscreen}×</span></span>
+                        ) : null}
+                        {a.violation_details.tab ? (
+                          <span>🔁 Tab switch: <span className="text-red-400 font-medium">{a.violation_details.tab}×</span></span>
+                        ) : null}
+                        {a.violation_details.window ? (
+                          <span>🪟 Window switch: <span className="text-red-400 font-medium">{a.violation_details.window}×</span></span>
+                        ) : null}
+                        {!a.violation_details.fullscreen && !a.violation_details.tab && !a.violation_details.window && (
+                          <span className="text-gray-600 italic">legacy data</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2 pr-4">
                       <span className={`text-xs ${
